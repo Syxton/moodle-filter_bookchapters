@@ -25,7 +25,7 @@
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 
-defined('MOODLE_INTERNAL') || die();
+namespace filter_bookchapters;
 
 /**
  * Book chapter filtering.
@@ -34,7 +34,7 @@ defined('MOODLE_INTERNAL') || die();
  * @copyright  2017 Matt Davidson
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
-class filter_bookchapters extends moodle_text_filter {
+class text_filter extends \core_filters\text_filter {
     // Trivial-cache - keyed on $cachedcourseid and $cacheduserid.
     /** @var array section list. */
     public static $chapterlist = null;
@@ -54,7 +54,7 @@ class filter_bookchapters extends moodle_text_filter {
      * @param array $options The standard filter options passed.
      * @return string Filtered text.
      */
-    public function filter($text, array $options = array()) {
+    public function filter($text, array $options = []) {
         global $USER, $DB; // Since 2.7 we can finally start using globals in filters.
 
         $coursectx = $this->context->get_course_context(false);
@@ -77,26 +77,26 @@ class filter_bookchapters extends moodle_text_filter {
         // It may be cached.
 
         if (is_null(self::$chapterlist)) {
-            self::$chapterlist = array();
+            self::$chapterlist = [];
 
             $modinfo = get_fast_modinfo($courseid);
-            self::$chapterlist = array(); // We will store all the created filters here.
+            self::$chapterlist = []; // We will store all the created filters here.
 
             // Create array of chapters sorted by the name length (we are only interested in properties name and url).
-            $sortedchapters = array();
+            $sortedchapters = [];
 
             foreach ($modinfo->cms as $cm) {
                 // Use normal access control and visibility, but exclude labels and hidden activities.
-                if ($cm->modname == "book" && ($cm->visible and $cm->has_view() and $cm->uservisible)) {
-                    if ($chapters = $DB->get_records('book_chapters', array('bookid' => $cm->instance))) {
+                if ($cm->modname == "book" && ($cm->visible && $cm->has_view() && $cm->uservisible)) {
+                    if ($chapters = $DB->get_records('book_chapters', ['bookid' => $cm->instance])) {
                         foreach ($chapters as $chapter) {
                             if (!$chapter->hidden) { // Do not link if chapter is hidden.
-                                $sortedchapters[] = (object)array(
+                                $sortedchapters[] = (object) [
                                     'name' => $chapter->title,
                                     'url' => $cm->url . '&chapterid=' . $chapter->id,
                                     'id' => $chapter->id,
                                     'namelen' => -strlen($chapter->title), // Negative value for reverse sorting.
-                                );
+                                ];
                             }
                         }
                     }
@@ -104,7 +104,7 @@ class filter_bookchapters extends moodle_text_filter {
             }
 
             // Sort activities by the length of the section name in reverse order.
-            core_collator::asort_objects_by_property($sortedchapters, 'namelen', core_collator::SORT_NUMERIC);
+            \core_collator::asort_objects_by_property($sortedchapters, 'namelen', \core_collator::SORT_NUMERIC);
 
             foreach ($sortedchapters as $chapter) {
                 $title = s(trim(strip_tags($chapter->name)));
@@ -112,24 +112,27 @@ class filter_bookchapters extends moodle_text_filter {
                 $entname  = s($currentname);
                 // Avoid empty or unlinkable activity names.
                 if (!empty($title)) {
-                    $hrefopen = html_writer::start_tag('a',
-                            array('class' => 'autolink', 'title' => $title,
-                                'href' => $chapter->url));
-                    self::$chapterlist[$chapter->id] = new filterobject($currentname, $hrefopen, '</a>', false, true);
+                    $hrefopen = \html_writer::start_tag('a',
+                            [
+                        'class' => 'autolink',
+                        'title' => $title,
+                        'href' => $chapter->url,
+                    ]);
+                    self::$chapterlist[$chapter->id] = new \filterobject($currentname, $hrefopen, '</a>', false, true);
                     if ($currentname != $entname) {
                         // If name has some entity (&amp; &quot; &lt; &gt;) add that filter too. MDL-17545.
-                        self::$chapterlist[$chapter->id.'-e'] = new filterobject($entname, $hrefopen, '</a>', false, true);
+                        self::$chapterlist[$chapter->id.'-e'] = new \filterobject($entname, $hrefopen, '</a>', false, true);
                     }
                 }
             }
         }
 
-        $filterslist = array();
+        $filterslist = [];
         if (self::$chapterlist) {
             $chapterid = $this->context->instanceid;
             if ($this->context->contextlevel == CONTEXT_MODULE && isset(self::$chapterlist[$chapterid])) {
                 // Remove filterobjects for the current module.
-                $filterslist = array_values(array_diff_key(self::$chapterlist, array($chapterid => 1, $chapterid.'-e' => 1)));
+                $filterslist = array_values(array_diff_key(self::$chapterlist, [$chapterid => 1, $chapterid.'-e' => 1]));
             } else {
                 $filterslist = array_values(self::$chapterlist);
             }
